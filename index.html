@@ -45,9 +45,9 @@ br:[{n:"فرع ميدان الساعة",u:"https://maps.app.goo.gl/3YRHpijEeg6H7
 <script>
 const $=s=>document.querySelector(s),$d=$,M={s:'🍽️ الصالة',t:'🛍️ تيك أواي',d:'🛵 توصيل'};
 const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-let mode=localStorage.m||'s',items=[],S=DEF,cart=[],q='',loc=null;
+let mode=localStorage.m||'s',items=[],S=DEF,cart=[],q='',loc=null,nl=0;
 const price=o=>o[mode]===''||o[mode]==null?null:+o[mode],opts=i=>(i.z||[]).filter(o=>price(o)!=null);
-const tot=()=>cart.reduce((a,c)=>a+c.p*c.q,0),fee=()=>mode=='d'?Math.ceil((+S.fee||0)+(loc?(+S.km||0)*loc.km:0)):0,sh=on=>$('#sh').classList.toggle('on',!!on);
+const tot=()=>cart.reduce((a,c)=>a+c.p*c.q,0),fee=()=>mode=='d'&&loc?Math.ceil((+S.fee||0)+(+S.km||0)*loc.km):0,sh=on=>$('#sh').classList.toggle('on',!!on);
 Promise.all([db.collection('items').get(),db.doc('settings/main').get()]).then(([a,b])=>{
  items=a.docs.map(d=>({id:d.id,...d.data()})).filter(i=>!i.h).sort((x,y)=>x.o-y.o);S={...DEF,...(b.data()||{})};S.br=(S.br||[]).map((x,i)=>x.la!=null?x:{...x,la:(DEF.br[i]||{}).la,lo:(DEF.br[i]||{}).lo});head();render()
 }).catch(()=>$('#mn').innerHTML='<p style="padding:40px;text-align:center">تعذر تحميل المنيو، حاول تاني</p>');
@@ -55,7 +55,7 @@ function head(){let h='';if(S.logo)h+=`<img src="${esc(S.logo)}" alt="">`;else h
  $('#gal').innerHTML=(S.gal||[]).map(u=>`<img src="${esc(u)}" loading="lazy" alt="">`).join('');
  $('#ft').innerHTML=`<div>${(S.br||[]).map(b=>`<a href="${esc(b.u)}" target="_blank">📍 ${esc(b.n)}</a>`).join('')}</div><div style="margin:12px 0"><a href="${esc(S.fb)}" target="_blank">فيسبوك</a><a href="${esc(S.ig)}" target="_blank">انستجرام</a><a href="https://wa.me/${esc(S.wa)}" target="_blank">واتساب</a></div>الأسعار بالجنيه المصري`}
 $('#md').innerHTML=Object.entries(M).map(([k,v])=>`<button data-k="${k}">${v}</button>`).join('');
-$('#md').onclick=e=>{const k=e.target.dataset.k;if(k&&k!=mode){if(cart.length&&!confirm('تغيير القسم هيفضّي السلة، متأكد؟'))return;mode=k;localStorage.m=k;cart=[];loc=null;render()}};
+$('#md').onclick=e=>{const k=e.target.dataset.k;if(k&&k!=mode){if(cart.length&&!confirm('تغيير القسم هيفضّي السلة، متأكد؟'))return;mode=k;localStorage.m=k;cart=[];loc=null;nl=0;render()}};
 $('#q').oninput=e=>{q=e.target.value.trim();render()};
 $('#sh').onclick=e=>{if(e.target.id=='sh')sh(0)};
 function render(){document.querySelectorAll('#md button').forEach(b=>b.classList.toggle('on',b.dataset.k==mode));
@@ -67,20 +67,21 @@ $('#mn').onclick=e=>{const c=e.target.closest('.it');if(c)open(items.find(i=>i.i
 function open(i){let k=0;const o=opts(i),P=$('#pn'),d=()=>{P.innerHTML=`${i.im?`<img class="pi" src="${esc(i.im)}" alt="">`:''}<h3>${esc(i.n)}</h3>${i.d?`<p style="color:var(--mu);margin-top:6px">${esc(i.d)}</p>`:''}${o.map((x,j)=>`<button class="op ${j==k?'on':''}" data-j="${j}"><span>${esc(x.l)||'السعر'}</span><b>${price(x)} ج</b></button>`).join('')}${mode!='s'?`<button class="go" id="add">أضف للسلة • ${price(o[k])} ج</button>`:''}`;
  P.querySelectorAll('.op').forEach(b=>b.onclick=()=>{k=+b.dataset.j;d()});const a=$('#add');if(a)a.onclick=()=>{const x=o[k],id=i.id+x.l,f=cart.find(c=>c.k==id);f?f.q++:cart.push({k:id,n:i.n,l:x.l||'',p:price(x),q:1});cartbar();sh(0)}};d();sh(1)}
 function cartbar(){const n=cart.reduce((a,c)=>a+c.q,0);$('#ct').style.display=n?'block':'none';$('#cb').textContent=`🛒 السلة (${n}) • ${tot()} ج`}
-$('#cb').onclick=()=>{$('#pn').innerHTML=`<h3>سلتك</h3><div id="cl"></div><input class="f" id="nm" placeholder="الاسم"><input class="f" id="ph" type="tel" placeholder="رقم التليفون">${mode=='d'?'<textarea class="f" id="dr" rows="2" placeholder="العنوان بالتفصيل"></textarea><button class="go" id="gl" style="background:var(--or);margin-top:8px;padding:10px;font-size:14px">📍 حدد موقعي لحساب التوصيل</button><p id="lm" style="color:var(--mu);font-size:12px;margin-top:6px"></p>':''}<textarea class="f" id="nt" rows="2" placeholder="ملاحظات (اختياري)"></textarea><button class="go" id="sd">تأكيد الطلب</button>`;lst();sh(1)};
-function lst(){$('#cl').innerHTML=cart.map((c,j)=>`<div class="r"><span>${esc(c.n)} ${esc(c.l)}<br><small>${c.p*c.q} ج</small></span><span><button data-j="${j}" data-d="1">+</button> ${c.q} <button data-j="${j}" data-d="-1">−</button></span></div>`).join('')+`<p style="margin:10px 0">المجموع: <b>${tot()} ج</b>${mode=='d'?(loc?` + توصيل ${fee()} ج (${loc.km} كم) = <b>${tot()+fee()} ج</b>`:`<br><small style="color:var(--mu)">التوصيل ${+S.fee||0} ج + ${+S.km||0} ج لكل كيلو، حدد موقعك لحساب السعر</small>`):''}</p>`}
-$('#pn').onclick=e=>{const b=e.target;if(b.dataset.d){const c=cart[b.dataset.j];c.q+=+b.dataset.d;if(c.q<1)cart.splice(b.dataset.j,1);cartbar();cart.length?lst():sh(0)}if(b.id=='sd')send();if(b.id=='gl')locate();if(b.id=='ok')sh(0)};
+function cartView(){$('#pn').innerHTML=`<h3>سلتك</h3><div id="cl"></div><input class="f" id="nm" placeholder="الاسم"><input class="f" id="ph" type="tel" placeholder="رقم التليفون">${mode=='d'?'<textarea class="f" id="dr" rows="2" placeholder="العنوان بالتفصيل"></textarea>':''}<textarea class="f" id="nt" rows="2" placeholder="ملاحظات (اختياري)"></textarea><button class="go" id="sd">تأكيد الطلب</button>`;lst()}
+$('#cb').onclick=()=>{if(mode=='d'&&!loc&&!nl)$('#pn').innerHTML='<h3>التوصيل</h3><button class="go" id="gl">📍 احسب سعر التوصيل</button><div id="lm" style="color:var(--mu);font-size:13px;margin-top:10px"></div>';else cartView();sh(1)};
+function lst(){$('#cl').innerHTML=cart.map((c,j)=>`<div class="r"><span>${esc(c.n)} ${esc(c.l)}<br><small>${c.p*c.q} ج</small></span><span><button data-j="${j}" data-d="1">+</button> ${c.q} <button data-j="${j}" data-d="-1">−</button></span></div>`).join('')+`<p style="margin:10px 0">المجموع: <b>${tot()} ج</b>${mode=='d'?(loc?` + توصيل ${fee()} ج (${loc.km} كم) = <b>${tot()+fee()} ج</b>`:`<br><b style="color:var(--or)">⚠️ سعر التوصيل هيتأكد معاك بالتليفون</b>`):''}</p>`}
+$('#pn').onclick=e=>{const b=e.target;if(b.dataset.d){const c=cart[b.dataset.j];c.q+=+b.dataset.d;if(c.q<1)cart.splice(b.dataset.j,1);cartbar();cart.length?lst():sh(0)}if(b.id=='sd')send();if(b.id=='gl')locate();if(b.id=='nl'){nl=1;cartView()}if(b.id=='ok')sh(0)};
 const hv=(a,b,c,d)=>{const r=Math.PI/180,x=(c-a)*r,y=(d-b)*r,h=Math.sin(x/2)**2+Math.cos(a*r)*Math.cos(c*r)*Math.sin(y/2)**2;return 12742*Math.asin(Math.sqrt(h))};
-function locate(){const lm=$('#lm');if(!navigator.geolocation){lm.textContent='المتصفح مش بيدعم تحديد الموقع';return}
+const fail=m=>{const lm=$('#lm');if(lm)lm.innerHTML=m+'<br><button class="go" id="nl" style="background:#4a2262;color:#fff;margin-top:8px;padding:10px;font-size:13px">كمّل من غير حساب (هنأكد التوصيل بالتليفون)</button>'};
+function setLoc(la,lo){let best=null;(S.br||[]).forEach(b=>{if(b.la==null)return;const d=hv(la,lo,b.la,b.lo)*1.3;if(!best||d<best.km)best={km:d,n:b.n}});
+ if(!best){fail('مفيش إحداثيات للفروع');return}
+ loc={la,lo,km:Math.round(best.km*10)/10,b:best.n,ap:0};cartView()}
+function locate(){const lm=$('#lm');if(!navigator.geolocation){fail('المتصفح مش بيدعم تحديد الموقع.');return}
  lm.textContent='⏳ بنحدد موقعك...';
- navigator.geolocation.getCurrentPosition(p=>{const la=p.coords.latitude,lo=p.coords.longitude;let best=null;
-  (S.br||[]).forEach(b=>{if(b.la==null)return;const d=hv(la,lo,b.la,b.lo)*1.3;if(!best||d<best.km)best={km:d,n:b.n}});
-  if(!best){lm.textContent='مفيش إحداثيات للفروع';return}
-  loc={la,lo,km:Math.round(best.km*10)/10,b:best.n};lm.textContent=`📍 أقرب فرع: ${best.n} • المسافة حوالي ${loc.km} كم`;lst()},
-  ()=>{lm.textContent='ما قدرناش نحدد موقعك، فعّل الموقع وحاول تاني، أو كمّل وهنأكد التوصيل بالتليفون'},{enableHighAccuracy:true,timeout:12000})}
+ navigator.geolocation.getCurrentPosition(p=>setLoc(p.coords.latitude,p.coords.longitude),e=>fail(e.code==1?'الموقع مقفول. اضغط على 🔒 جنب رابط الموقع واسمح بالموقع وجرّب تاني (ولو فاتح من فيسبوك أو انستجرام افتحه من كروم أو سفاري).':'ما قدرناش نحدد موقعك، جرّب تاني.'),{enableHighAccuracy:true,timeout:12000})}
 async function send(){const g=s=>($d(s)?.value||'').trim(),nm=g('#nm'),ph=g('#ph'),dr=g('#dr');
  if(nm.length<2||!/^[0-9+\s]{8,15}$/.test(ph)||(mode=='d'&&dr.length<5))return alert('كمّل بياناتك: الاسم والتليفون'+(mode=='d'?' والعنوان':''));
- $('#sd').disabled=1;try{const r=await db.collection('orders').add({mode,name:nm,phone:ph,addr:dr,note:g('#nt'),items:cart.map(({n,l,p,q})=>({n,l,p,q})),sub:tot(),fee:fee(),total:tot()+fee(),...(mode=='d'&&loc?{la:loc.la,lo:loc.lo,km:loc.km,br:loc.b}:{}),st:'new',ts:firebase.firestore.FieldValue.serverTimestamp()});
- cart=[];loc=null;cartbar();$('#pn').innerHTML=`<h3>✅ تم استلام طلبك</h3><p style="margin-top:8px">رقم الطلب: ${r.id.slice(0,5).toUpperCase()}<br>هنكلمك على ${esc(ph)} للتأكيد.</p><button class="go" id="ok">تمام</button>`}
+ $('#sd').disabled=1;try{const r=await db.collection('orders').add({mode,name:nm,phone:ph,addr:dr,note:g('#nt'),items:cart.map(({n,l,p,q})=>({n,l,p,q})),sub:tot(),fee:fee(),total:tot()+fee(),...(mode=='d'?(loc?{la:loc.la,lo:loc.lo,km:loc.km,br:loc.b,ap:loc.ap}:{nf:1}):{}),st:'new',ts:firebase.firestore.FieldValue.serverTimestamp()});
+ cart=[];loc=null;nl=0;cartbar();$('#pn').innerHTML=`<h3>✅ تم استلام طلبك</h3><p style="margin-top:8px">رقم الطلب: ${r.id.slice(0,5).toUpperCase()}<br>هنكلمك على ${esc(ph)} للتأكيد.</p><button class="go" id="ok">تمام</button>`}
  catch(e){alert('حصلت مشكلة، حاول تاني أو كلمنا على واتساب');$('#sd').disabled=0}}
 </script></body></html>
