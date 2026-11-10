@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>شاشة المطبخ</title>
+<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>شاشة المطبخ - طباعة مضغوطة</title>
 <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0}body{background:#1e0a29;color:#fff;font-family:Cairo,Tahoma,sans-serif;padding:10px;max-width:1100px;margin:auto}
@@ -47,46 +47,65 @@ ${o.mode!='s'?`<br><small>👤 ${esc(o.name)} • 📞 ${esc(o.phone)}${o.addr?'
 <ul>${o.items.map(i=>`<li><span>${i.q}× ${esc(i.n)} ${esc(i.l)}</span><span>${i.p*i.q}</span></li>`).join('')}</ul>${o.note?`<small>📝 ${esc(o.note)}</small><br>`:''}<b>الإجمالي: ${o.total} ج</b>
 <div class="act"><button data-p="${o.id}">🖨️ طباعة</button><button class="ok" data-d="${o.id}">✅ تم</button></div></div>`).join('')||'<p class="e">مفيش طلبات</p>'}
 
-// دالة الطباعة المحسنة عبر iframe مخفي لتجاوز مشاكل المتصفح
 function print(id){
     const o=orders.find(x=>x.id==id);if(!o)return;
     const d=o.ts?.toDate?.()||new Date(),wa=S.wa?'0'+String(S.wa).replace(/^20/,''):'';
     
-    // بناء كود الفاتورة بتنسيق حراري سليم 80mm
+    // تصميم مخصص بهوامش صفرية لقص الورقة فوراً بدون مساحات فارغة طويلة
     const htmlContent = `
-        <html dir="rtl"><head><meta charset="utf-8"><title>طباعة طلب</title>
+        <html dir="rtl"><head><meta charset="utf-8"><title>طباعة</title>
         <style>
-            body{background:#fff;color:#000;padding:0;margin:0;font-family:Cairo,Tahoma,Arial,sans-serif;width:72mm}
-            .r{text-align:center}
-            .r img{width:38mm;filter:grayscale(1) contrast(1.3)}
-            .r h2{font-size:21px;margin:1.5mm 0}
-            .r .ln{border-top:2px dashed #000;margin:2.5mm 0}
-            .r .row{display:flex;justify-content:space-between;font-size:14px;padding:.6mm 0;text-align:start}
-            .r .big{font-size:18px;font-weight:900}
-            .r .tb{font-size:26px;font-weight:900;border:3px solid #000;border-radius:3mm;padding:1mm 4mm;display:inline-block;margin:1mm 0}
-            .r small{color:#000;font-size:12px}
+            @page { size: 80mm auto; margin: 0mm; }
+            body { background: #fff; color: #000; padding: 3mm 2mm; margin: 0; font-family: Cairo, Tahoma, sans-serif; width: 76mm; font-size: 11px; line-height: 1.2; }
+            .ticket { border-bottom: 1px dashed #000; padding-bottom: 2mm; margin-bottom: 2mm; }
+            .center { text-align: center; }
+            .bold { font-weight: 900; }
+            .title { font-size: 14px; font-weight: 900; margin-bottom: 1mm; }
+            .row { display: flex; justify-content: space-between; padding: 0.5mm 0; }
+            .qr-img { width: 22mm; height: 22mm; margin-top: 1mm; }
+            .dash { border-top: 1px dashed #000; margin: 1.5mm 0; }
         </style></head><body>
-        <div class="r">
-            ${S.logo?`<img src="${esc(S.logo)}" alt="">`:''}
-            <h2>كشري حكاية</h2>
-            <div>${d.toLocaleDateString('ar-EG')} • ${d.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</div>
-            <div class="ln"></div>
-            ${o.mode=='s'?`<div class="tb">طاولة ${esc(o.tb||'')}</div>`:`<div class="big">${MD[o.mode]}</div>`}
-            <div>طلب #${o.id.slice(0,5).toUpperCase()}</div>
-            <div class="ln"></div>
-            ${o.items.map(i=>`<div class="row"><span>${i.q}× ${esc(i.n)} ${esc(i.l)}</span><b>${i.p*i.q}</b></div>`).join('')}
-            <div class="ln"></div>
-            ${o.fee?`<div class="row"><span>التوصيل</span><b>${o.fee}</b></div>`:''}
-            <div class="row big"><span>الإجمالي</span><span>${o.total} ج</span></div>
-            ${o.mode!='s'?`<div class="ln"></div><div class="row"><span>${esc(o.name)}</span><span>${esc(o.phone)}</span></div>${o.addr?`<div style="text-align:start">📍 ${esc(o.addr)}</div>`:''}`:''}
-            ${o.note?`<div class="ln"></div><div style="text-align:start">📝 ${esc(o.note)}</div>`:''}
-            <div class="ln"></div>
-            <div>شكراً لزيارتكم ❤️</div>
-            ${wa?`<small>للطلب: ${wa}</small>`:''}
-        </div></body></html>
+
+        <!-- 1. ورقة المطبخ: أصناف فقط وبحجم صغير جداً -->
+        <div class="ticket center">
+            <div class="title">مطبخ - ${o.mode=='s'?'طاولة '+esc(o.tb||''):MD[o.mode]}</div>
+            <div style="font-size:10px;">طلب #${o.id.slice(0,5).toUpperCase()}</div>
+            <div class="dash"></div>
+            <div style="text-align:start;">
+                ${o.items.map(i=>`<div style="font-size:13px;font-weight:700;padding:1mm 0;">▪️ ${i.q}× ${esc(i.n)} ${esc(i.l)}</div>`).join('')}
+            </div>
+            ${o.note?`<div class="dash"></div><div style="text-align:start;font-size:10px;">📝 ملاحظة: ${esc(o.note)}</div>`:''}
+        </div>
+
+        <!-- 2. ورقة العميل: تفصيلية وشيك مع الـ QR Code وبدون مساحات زايدة -->
+        <div class="center">
+            ${S.logo?`<img src="${esc(S.logo)}" style="width:20mm;filter:grayscale(1) contrast(1.3);">`:''}
+            <div class="bold" style="font-size:13px;margin:0.5mm 0;">كشري حكاية</div>
+            <div style="font-size:9px;">${d.toLocaleDateString('ar-EG')} • ${d.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</div>
+            <div class="dash"></div>
+            ${o.mode=='s'?`<div class="bold" style="font-size:16px;">طاولة ${esc(o.tb||'')}</div>`:`<div class="bold" style="font-size:12px;">${MD[o.mode]}</div>`}
+            <div style="font-size:10px;">طلب #${o.id.slice(0,5).toUpperCase()}</div>
+            <div class="dash"></div>
+            <div style="text-align:start;">
+                ${o.items.map(i=>`<div class="row"><span>${i.q}× ${esc(i.n)} ${esc(i.l)}</span><b>${i.p*i.q}ج</b></div>`).join('')}
+            </div>
+            <div class="dash"></div>
+            ${o.fee?`<div class="row"><span>التوصيل</span><b>${o.fee}ج</b></div>`:''}
+            <div class="row bold" style="font-size:13px;"><span>الإجمالي</span><span>${o.total} جنيه</span></div>
+            ${o.mode!='s'?`<div class="dash"></div><div style="text-align:start;font-size:10px;"><b>العميل:</b> ${esc(o.name)}<br><b>الهاتف:</b> ${esc(o.phone)}${o.addr?'<br><b>العنوان:</b> '+esc(o.addr):''}</div>`:''}
+            <div class="dash"></div>
+            <div style="font-size:10px;">شكراً لزيارتكم ❤️</div>
+            
+            <!-- الكيو آر كود الخاص بالمكان -->
+            <div style="margin-top:1.5mm;">
+                <img src="https://i.ibb.co/3yk63fW/qr-koshary.png" class="qr-img" alt="QR Code">
+                <div style="font-size:8px;margin-top:0.5mm;">امسح الكود لطلباتك وزيارتنا</div>
+            </div>
+        </div>
+
+        </body></html>
     `;
 
-    // إنشاء عنصر iframe خفي لإرسال أمر الطباعة مباشرة بدلاً من نافذة المتصفح الرئيسية
     let iframe = document.createElement('iframe');
     iframe.style.position = 'absolute';
     iframe.style.width = '0px';
@@ -102,7 +121,6 @@ function print(id){
     setTimeout(() => {
         iframe.contentWindow.focus();
         iframe.contentWindow.print();
-        // إزالة الإطار المخفي بعد انتهاء الطباعة
         setTimeout(() => { document.body.removeChild(iframe); }, 1000);
     }, 300);
 
