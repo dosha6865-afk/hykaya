@@ -28,7 +28,6 @@ li{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-botto
 .act button{flex:1;border:0;border-radius:12px;padding:10px;background:#f59e0b;color:#1b1000}
 .act .ok{background:#7ab51d;color:#16260a}
 .e{text-align:center;padding:60px;color:#d9c3e6}
-#pr{display:none}
 </style>
 </head>
 <body>
@@ -41,18 +40,14 @@ li{display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-botto
   </div>
   <div class="g" id="g"></div>
 </div>
-<div id="pr"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script>
 /*
-  تنبيه أمني:
-  لا تضع كلمة مرور مدير ثابتة داخل ملف HTML منشور.
-  غيّر كلمة المرور التي سبق استخدامها، واستخدم حساباً مخصصاً للطباعة
-  بصلاحيات Firestore محدودة. ضع بيانات الحساب الجديدة هنا مؤقتاً فقط
-  إذا كنت تختبر محلياً؛ الأفضل نقل تسجيل الدخول إلى خادم آمن.
+  تنبيه أمني: لا تضع كلمة مرور مدير ثابتة داخل ملف HTML منشور.
+  غيّر كلمة المرور التي سبق استخدامها، واستخدم حساباً مخصصاً للطباعة بصلاحيات محدودة.
 */
 const FB = {
   apiKey: "AIzaSyBVo7lZD7wA0ZiyonjFDJ02oI7vtFL6PL8",
@@ -60,379 +55,230 @@ const FB = {
   projectId: "hekayah-2b746",
   appId: "1:835699402304:web:fc3ec2a7b09fe3029f61a5"
 };
-
 firebase.initializeApp(FB);
 const db = firebase.firestore();
 const A = firebase.auth();
 
-/* أدخل بيانات حساب الطباعة الجديد بعد تغيير كلمة المرور القديمة */
+/* أدخل بيانات حساب الطباعة */
 const PRINT_USER = "admin@hekaya.app";
 const PRINT_PASSWORD = "PUT_NEW_PASSWORD_HERE";
 
 const DEF = {
   fb: "https://www.facebook.com/share/1YafafjWqT/",
   ig: "https://www.instagram.com/hekaya_koshary/",
-  wa: "201103008038",
-  fee: 10,
-  km: 5,
+  wa: "201103008038", fee: 10, km: 5,
   br: [
     {n:"فرع ميدان الساعة",u:"https://maps.app.goo.gl/3YRHpijEeg6H73Rc9?g_st=ac",la:31.2437686,lo:29.9845781},
     {n:"فرع 45",u:"https://maps.app.goo.gl/XGmzqW8zqPxJu1M2A?g_st=ac",la:31.262968,lo:30.007603}
   ]
 };
 
-const $ = s => document.querySelector(s);
-const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({
-  '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'
-}[c]));
+/* ====== الأقسام اللي بتطلع لكل قسم ورقة لوحده ======
+   كل سطر: [اسم القسم على الورقة, كلمة بتتدوّر عليها في اسم القسم في المنيو]
+   أي قسم مش متسجل هنا بيطلع ورقة باسمه هو. عدّل القائمة زي ما تحب. */
+const STATIONS = [
+  ['كريب', /كريب/],
+  ['بيتزا', /بيتزا/],
+  ['فطير', /فطير/],
+  ['كشري', /كشري/],
+  ['مكرونة', /مكرون|طواجن/],
+  ['وجبات', /وجبات/],
+  ['سندوتشات', /سندوت|ساندوتش/]
+];
 
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const MD = {s:'🍽️ الصالة',t:'🛍️ تيك أواي',d:'🛵 توصيل'};
-let orders = [];
-let S = DEF;
-let f = localStorage.kf || 's';
-let first = 1;
-let started = 0;
-let unsubscribeOrders = null;
-let printingQueue = Promise.resolve();
+let orders = [], S = DEF, f = localStorage.kf || 's', first = 1, started = 0;
+let unsubscribeOrders = null, printingQueue = Promise.resolve(), catByName = {};
 
 $('#ap').checked = localStorage.ka === '1';
-$('#ap').onchange = () => {
-  localStorage.ka = $('#ap').checked ? '1' : '0';
-};
+$('#ap').onchange = () => { localStorage.ka = $('#ap').checked ? '1' : '0'; };
 
 const beep = () => {
   try {
     const c = new (window.AudioContext || window.webkitAudioContext)();
     const o = c.createOscillator();
-    o.connect(c.destination);
-    o.start();
-    setTimeout(() => {
-      o.stop();
-      c.close();
-    }, 600);
+    o.connect(c.destination); o.start();
+    setTimeout(() => { o.stop(); c.close(); }, 600);
   } catch(e) {}
 };
+const tm = o => o.ts?.toDate ? o.ts.toDate().toLocaleString('ar-EG') : '';
 
-const tm = o => o.ts?.toDate
-  ? o.ts.toDate().toLocaleString('ar-EG')
-  : '';
-
-A.signInWithEmailAndPassword(PRINT_USER, PRINT_PASSWORD)
-  .catch(() => {
-    $('#gate').textContent =
-      'تعذر الدخول. راجع حساب الطباعة وكلمة المرور وإعداد Email/Password في Firebase.';
-  });
-
-A.onAuthStateChanged(u => {
-  $('#gate').hidden = !!u;
-  $('#app').hidden = !u;
-  if (u) start();
+A.signInWithEmailAndPassword(PRINT_USER, PRINT_PASSWORD).catch(() => {
+  $('#gate').textContent = 'تعذر الدخول. راجع حساب الطباعة وكلمة المرور وإعداد Email/Password في Firebase.';
 });
+A.onAuthStateChanged(u => { $('#gate').hidden = !!u; $('#app').hidden = !u; if (u) start(); });
 
 function start() {
   if (started) return;
   started = 1;
+  db.doc('settings/main').get().then(d => { S = {...DEF, ...(d.data() || {})}; }).catch(() => { S = DEF; });
+  /* للطلبات القديمة اللي مفيهاش قسم: بندوّر على الصنف بالاسم لو اسمه مش متكرر */
+  db.collection('items').get().then(q => {
+    const seen = {};
+    q.docs.forEach(d => { const x = d.data(); (seen[x.n] = seen[x.n] || new Set()).add(x.c); });
+    Object.keys(seen).forEach(n => { if (seen[n].size === 1) catByName[n] = [...seen[n]][0]; });
+  }).catch(() => {});
 
-  db.doc('settings/main').get()
-    .then(d => { S = {...DEF, ...(d.data() || {})}; })
-    .catch(() => { S = DEF; });
-
-  unsubscribeOrders = db.collection('orders')
-    .orderBy('ts','desc')
-    .limit(80)
-    .onSnapshot(snapshot => {
-      const newIds = [];
-
-      snapshot.docChanges().forEach(change => {
-        if (change.type === 'added' && !first) {
-          const order = change.doc.data();
-          if (f === 'all' || order.mode === f) {
-            newIds.push(change.doc.id);
-          }
-        }
-      });
-
-      orders = snapshot.docs.map(d => ({id:d.id,...d.data()}));
-      first = 0;
-      show();
-
-      if (newIds.length) {
-        if ($('#sd').checked) beep();
-        if ($('#ap').checked) {
-          newIds.forEach(id => {
-            printingQueue = printingQueue.then(() => print(id));
-          });
-        }
+  unsubscribeOrders = db.collection('orders').orderBy('ts','desc').limit(80).onSnapshot(snapshot => {
+    const newIds = [];
+    snapshot.docChanges().forEach(change => {
+      if (change.type === 'added' && !first) {
+        const order = change.doc.data();
+        if (f === 'all' || order.mode === f) newIds.push(change.doc.id);
       }
-    }, error => {
-      $('#gate').hidden = false;
-      $('#gate').textContent = 'تعذر تحميل الطلبات: ' + error.message;
     });
+    orders = snapshot.docs.map(d => ({id:d.id,...d.data()}));
+    first = 0;
+    show();
+    if (newIds.length) {
+      if ($('#sd').checked) beep();
+      if ($('#ap').checked) newIds.forEach(id => { printingQueue = printingQueue.then(() => print(id)); });
+    }
+  }, error => { $('#gate').hidden = false; $('#gate').textContent = 'تعذر تحميل الطلبات: ' + error.message; });
 }
 
 function show() {
-  $('#fl').innerHTML = [
-    ['s','🍽️ الصالة'],
-    ['t','🛍️ تيك أواي'],
-    ['d','🛵 توصيل'],
-    ['all','الكل']
-  ].map(([k,v]) =>
-    `<button data-f="${k}" class="${k===f?'on':''}">${v}</button>`
-  ).join('');
-
-  $('#g').innerHTML = orders
-    .filter(o => f === 'all' || o.mode === f)
-    .map(o => `
-      <div class="c ${o.st === 'new' ? 'n' : ''}">
-        <div class="h">
-          <b>${o.mode === 's' ? 'طاولة '+esc(o.tb || '') : (MD[o.mode] || 'طلب')}</b>
-          <small>#${o.id.slice(0,5).toUpperCase()}</small>
-        </div>
-        <small>${tm(o)}</small>
-        ${o.mode !== 's' ? `
-          <br><small>👤 ${esc(o.name)} • 📞 ${esc(o.phone)}
-          ${o.addr ? '<br>📍 '+esc(o.addr) : ''}</small>
-        ` : ''}
-        <ul>
-          ${(o.items || []).map(i => `
-            <li>
-              <span>${esc(i.q)}× ${esc(i.n)} ${esc(i.l || '')}</span>
-              <span>${Number(i.p || 0) * Number(i.q || 0)}</span>
-            </li>
-          `).join('')}
-        </ul>
-        ${o.note ? `<small>📝 ${esc(o.note)}</small><br>` : ''}
-        <b>الإجمالي: ${esc(o.total)} ج</b>
-        <div class="act">
-          <button data-p="${o.id}">🖨️ طباعة</button>
-          <button class="ok" data-d="${o.id}">✅ تم</button>
-        </div>
-      </div>
-    `).join('') || '<p class="e">مفيش طلبات</p>';
+  $('#fl').innerHTML = [['s','🍽️ الصالة'],['t','🛍️ تيك أواي'],['d','🛵 توصيل'],['all','الكل']]
+    .map(([k,v]) => `<button data-f="${k}" class="${k===f?'on':''}">${v}</button>`).join('');
+  $('#g').innerHTML = orders.filter(o => f === 'all' || o.mode === f).map(o => `
+    <div class="c ${o.st === 'new' ? 'n' : ''}">
+      <div class="h"><b>${o.mode === 's' ? 'طاولة '+esc(o.tb || '') : (MD[o.mode] || 'طلب')}</b><small>#${o.id.slice(0,5).toUpperCase()}</small></div>
+      <small>${tm(o)}</small>
+      ${o.mode !== 's' ? `<br><small>👤 ${esc(o.name)} • 📞 ${esc(o.phone)}${o.addr ? '<br>📍 '+esc(o.addr) : ''}</small>` : ''}
+      <ul>${(o.items || []).map(i => `<li><span>${esc(i.q)}× ${esc(i.n)} ${esc(i.l || '')}</span><span>${Number(i.p || 0) * Number(i.q || 0)}</span></li>`).join('')}</ul>
+      ${o.note ? `<small>📝 ${esc(o.note)}</small><br>` : ''}
+      <b>الإجمالي: ${esc(o.total)} ج</b>
+      <div class="act"><button data-p="${o.id}">🖨️ طباعة</button><button class="ok" data-d="${o.id}">✅ تم</button></div>
+    </div>`).join('') || '<p class="e">مفيش طلبات</p>';
 }
 
-/* تجهيز HTML مستقل لكل إيصال */
-function makePrintDocument(content, includeLogo = false) {
-  return `<!DOCTYPE html>
-  <html lang="ar" dir="rtl">
-  <head>
-    <meta charset="utf-8">
-    <title>إيصال</title>
-    <style>
-      @page { size: 80mm auto; margin: 0; }
-      * { box-sizing: border-box; }
-      html, body {
-        width: 80mm;
-        margin: 0;
-        padding: 0;
-        background: #fff;
-        color: #000;
-        font-family: Tahoma, Arial, sans-serif;
-        font-size: 11px;
-        line-height: 1.35;
-      }
-      body { padding: 2mm 3mm; }
-      .center { text-align: center; }
-      .bold { font-weight: 900; }
-      .title { font-size: 15px; font-weight: 900; }
-      .dash { border-top: 1px dashed #000; margin: 2mm 0; }
-      .item {
-        display: flex;
-        justify-content: space-between;
-        align-items: flex-start;
-        gap: 2mm;
-        padding: 1mm 0;
-      }
-      .item span { overflow-wrap: anywhere; }
-      .item b { white-space: nowrap; }
-      .note { overflow-wrap: anywhere; }
-      .qr { width: 22mm; height: 22mm; object-fit: contain; }
-      img { max-width: 100%; }
-      .end { margin-top: 2mm; }
-    </style>
-  </head>
-  <body>${content}</body>
-  </html>`;
+/* مستند طباعة واحد: كل ورقة (قسم) في صفحة لوحدها، وكله بأمر طباعة واحد */
+function makePrintDocument(content) {
+  return `<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>طباعة</title>
+<style>
+@page{size:80mm auto;margin:0}
+*{box-sizing:border-box}
+html,body{width:80mm;margin:0;padding:0;background:#fff;color:#000;font-family:Tahoma,Arial,sans-serif;font-size:11px;line-height:1.35}
+.pg{width:80mm;padding:3mm;page-break-inside:avoid;break-inside:avoid}
+.pg + .pg{page-break-before:always;break-before:page}
+.center{text-align:center}.bold{font-weight:900}.title{font-size:15px;font-weight:900}
+.stn{font-size:24px;font-weight:900;border:2px solid #000;border-radius:2mm;padding:1mm 4mm;display:inline-block;margin:1mm 0}
+.dash{border-top:1px dashed #000;margin:2mm 0}
+.item{display:flex;justify-content:space-between;align-items:flex-start;gap:2mm;padding:1mm 0}
+.item span{overflow-wrap:anywhere}.item b{white-space:nowrap}
+.big{font-size:14px;font-weight:900}
+.note{overflow-wrap:anywhere}
+.qr{width:22mm;height:22mm;object-fit:contain}
+img{max-width:100%}
+</style></head><body>${content}</body></html>`;
 }
 
-/*
-  طباعة مهمة واحدة في iframe.
-  عند انتهاء نافذة الطباعة يتم حذف iframe ثم تشغيل المهمة التالية.
-  القص الفعلي يعتمد على تفعيل Auto Cut في تعريف SPRT على Windows.
-*/
+/* أمر طباعة واحد بس لكل المستند (كل الصفحات) */
 function printOneDocument(html) {
   return new Promise(resolve => {
     const frame = document.createElement('iframe');
     frame.setAttribute('aria-hidden','true');
-    frame.style.position = 'fixed';
-    frame.style.left = '-10000px';
-    frame.style.top = '0';
-    frame.style.width = '80mm';
-    frame.style.height = '20mm';
-    frame.style.border = '0';
+    Object.assign(frame.style, {position:'fixed',left:'-10000px',top:'0',width:'80mm',height:'20mm',border:'0'});
     document.body.appendChild(frame);
-
     const doc = frame.contentWindow.document;
-    doc.open();
-    doc.write(html);
-    doc.close();
+    doc.open(); doc.write(html); doc.close();
 
-    const cleanup = () => {
-      setTimeout(() => {
-        frame.remove();
-        resolve();
-      }, 300);
-    };
+    let finished = false;
+    const finish = () => { if (finished) return; finished = true; setTimeout(() => { frame.remove(); resolve(); }, 300); };
 
-    const images = Array.from(doc.images);
-    Promise.all(images.map(img => {
-      if (img.complete) return Promise.resolve();
-      return new Promise(done => {
-        img.onload = done;
-        img.onerror = done;
+    Promise.all(Array.from(doc.images).map(img => img.complete ? 1 : new Promise(done => { img.onload = done; img.onerror = done; })))
+      .then(() => {
+        const win = frame.contentWindow;
+        win.onafterprint = finish;
+        try { win.focus(); win.print(); } catch (err) { console.error('Print error:', err); finish(); }
       });
-    })).then(() => {
-      const win = frame.contentWindow;
-      let finished = false;
-
-      const finish = () => {
-        if (finished) return;
-        finished = true;
-        cleanup();
-      };
-
-      win.onafterprint = finish;
-
-      try {
-        win.focus();
-        win.print();
-        /* احتياط لبعض المتصفحات التي لا تطلق afterprint */
-        setTimeout(() => {
-          if (!finished) {
-            /* لا نغلق نافذة الطباعة بالقوة؛ afterprint هو الأساس */
-          }
-        }, 60000);
-      } catch (err) {
-        console.error('Print error:', err);
-        finish();
-      }
-    });
   });
+}
+
+const cleanCat = c => String(c || '').replace(/^[^\u0600-\u06FFA-Za-z0-9]+/, '').trim();
+function stationOf(i) {
+  const cc = cleanCat(i.c || catByName[i.n] || '');
+  if (!cc) return 'أخرى';
+  const m = STATIONS.find(([, rx]) => rx.test(cc));
+  return m ? m[0] : cc;
 }
 
 async function print(id) {
   const o = orders.find(x => x.id === id);
   if (!o) return;
-
   const d = o.ts?.toDate?.() || new Date();
-  const mode = o.mode === 's'
-    ? `طاولة ${esc(o.tb || '')}`
-    : (MD[o.mode] || 'طلب');
+  const when = d.toLocaleTimeString('ar-EG', {hour:'2-digit',minute:'2-digit'});
+  const mode = o.mode === 's' ? `طاولة ${esc(o.tb || '')}` : (MD[o.mode] || 'طلب');
+  const num = '#' + id.slice(0,5).toUpperCase();
 
-  const kitchenItems = (o.items || []).map(i => `
-    <div class="item bold">
-      <span>${esc(i.q)} × ${esc(i.n)} ${esc(i.l || '')}</span>
-    </div>
-  `).join('');
+  /* تقسيم الأصناف على الأقسام */
+  const groups = {};
+  (o.items || []).forEach(i => { (groups[stationOf(i)] = groups[stationOf(i)] || []).push(i); });
+  const order = Object.keys(groups).sort((a, b) => {
+    const ia = STATIONS.findIndex(s => s[0] === a), ib = STATIONS.findIndex(s => s[0] === b);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
+  });
 
-  const kitchen = makePrintDocument(`
-    <div class="center">
-      <div class="title">كشري حكاية</div>
-      <div class="bold">إيصال المطبخ</div>
-      <div class="bold">${mode}</div>
-      <div>طلب #${id.slice(0,5).toUpperCase()}</div>
-      <div>${d.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</div>
-    </div>
-    <div class="dash"></div>
-    ${kitchenItems}
-    ${o.note ? `
+  /* ورقة صغيرة لكل قسم (من غير أسعار) */
+  const slips = order.map(name => `
+    <section class="pg">
+      <div class="center">
+        <div class="stn">${esc(name)}</div>
+        <div class="big">${mode}</div>
+        <div>${num} • ${when}</div>
+      </div>
       <div class="dash"></div>
-      <div class="note bold">ملاحظات الطلب:</div>
-      <div class="note">${esc(o.note)}</div>
-    ` : ''}
-    <div class="dash"></div>
-    <div class="center end">نهاية إيصال المطبخ</div>
-  `);
+      ${groups[name].map(i => `<div class="item big"><span>${esc(i.q)} × ${esc(i.n)} ${esc(i.l || '')}</span></div>`).join('')}
+      ${o.note ? `<div class="dash"></div><div class="note bold">ملاحظات:</div><div class="note">${esc(o.note)}</div>` : ''}
+    </section>`).join('');
 
-  const customerItems = (o.items || []).map(i => `
-    <div class="item">
-      <span>${esc(i.q)} × ${esc(i.n)} ${esc(i.l || '')}</span>
-      <b>${Number(i.p || 0) * Number(i.q || 0)} ج</b>
-    </div>
-  `).join('');
-
-  const customer = makePrintDocument(`
-    <div class="center">
-      ${S.logo ? `<img src="${esc(S.logo)}" style="width:20mm;max-height:20mm;object-fit:contain">` : ''}
-      <div class="title">كشري حكاية</div>
-      <div>${d.toLocaleDateString('ar-EG')} • ${d.toLocaleTimeString('ar-EG',{hour:'2-digit',minute:'2-digit'})}</div>
-    </div>
-    <div class="dash"></div>
-    <div class="center bold">${mode}</div>
-    <div class="center">طلب #${id.slice(0,5).toUpperCase()}</div>
-    <div class="dash"></div>
-    ${customerItems}
-    <div class="dash"></div>
-    ${o.fee ? `
-      <div class="item"><span>التوصيل</span><b>${esc(o.fee)} ج</b></div>
-    ` : ''}
-    <div class="item bold" style="font-size:14px">
-      <span>الإجمالي</span><b>${esc(o.total)} جنيه</b>
-    </div>
-    ${o.mode !== 's' ? `
+  /* الورقة الكبيرة: كل الأصناف والمجموع */
+  const receipt = `
+    <section class="pg">
+      <div class="center">
+        ${S.logo ? `<img src="${esc(S.logo)}" style="width:20mm;max-height:20mm;object-fit:contain">` : ''}
+        <div class="title">كشري حكاية</div>
+        <div>${d.toLocaleDateString('ar-EG')} • ${when}</div>
+      </div>
       <div class="dash"></div>
-      <div><b>العميل:</b> ${esc(o.name)}</div>
-      <div><b>الهاتف:</b> ${esc(o.phone)}</div>
-      ${o.addr ? `<div><b>العنوان:</b> ${esc(o.addr)}</div>` : ''}
-    ` : ''}
-    <div class="dash"></div>
-    <div class="center">
-      شكراً لزيارتكم ❤️
-      <div><img class="qr" src="https://i.ibb.co/3yk63fW/qr-koshary.png" alt="QR"></div>
-      <small>امسح الكود لطلباتك وزيارتنا</small>
-    </div>
-  `);
+      <div class="center bold">${mode}</div>
+      <div class="center">${num}</div>
+      <div class="dash"></div>
+      ${(o.items || []).map(i => `<div class="item"><span>${esc(i.q)} × ${esc(i.n)} ${esc(i.l || '')}</span><b>${Number(i.p || 0) * Number(i.q || 0)} ج</b></div>`).join('')}
+      <div class="dash"></div>
+      ${o.fee ? `<div class="item"><span>التوصيل</span><b>${esc(o.fee)} ج</b></div>` : ''}
+      <div class="item bold" style="font-size:14px"><span>الإجمالي</span><b>${esc(o.total)} جنيه</b></div>
+      ${o.mode !== 's' ? `<div class="dash"></div><div><b>العميل:</b> ${esc(o.name)}</div><div><b>الهاتف:</b> ${esc(o.phone)}</div>${o.addr ? `<div><b>العنوان:</b> ${esc(o.addr)}</div>` : ''}` : ''}
+      ${o.note ? `<div class="dash"></div><div class="note"><b>ملاحظات:</b> ${esc(o.note)}</div>` : ''}
+      <div class="dash"></div>
+      <div class="center">
+        شكراً لزيارتكم ❤️
+        <div><img class="qr" src="https://e.top4top.io/p_3966d2x6h1.jpg" alt="QR"></div>
+        <small>امسح الكود لطلباتك وزيارتنا</small>
+      </div>
+    </section>`;
 
   try {
-    /* مهمتان منفصلتان: المطبخ أولاً ثم العميل */
-    await printOneDocument(kitchen);
-    await printOneDocument(customer);
-
-    if (o.st === 'new') {
-      await db.doc('orders/' + id).update({st:'prep'});
-    }
+    await printOneDocument(makePrintDocument(slips + receipt));
+    if (o.st === 'new') await db.doc('orders/' + id).update({st:'prep'});
   } catch (err) {
     console.error(err);
     alert('حصل خطأ أثناء الطباعة. راجع الطابعة والاتصال.');
   }
 }
 
-/* أزرار الفلاتر والطباعة وإنهاء الطلب */
 document.onclick = e => {
   const b = e.target.closest('button');
   if (!b) return;
-
-  if (b.dataset.f) {
-    f = b.dataset.f;
-    localStorage.kf = f;
-    show();
-  }
-
-  if (b.dataset.p) {
-    printingQueue = printingQueue.then(() => print(b.dataset.p));
-  }
-
-  if (b.dataset.d) {
-    if (confirm('الطلب هيتمسح من السجل نهائياً. متأكد؟')) {
-      db.doc('orders/' + b.dataset.d).delete()
-        .catch(err => alert('تعذر حذف الطلب: ' + err.message));
-    }
+  if (b.dataset.f) { f = b.dataset.f; localStorage.kf = f; show(); }
+  if (b.dataset.p) { printingQueue = printingQueue.then(() => print(b.dataset.p)); }
+  if (b.dataset.d && confirm('الطلب هيتمسح من السجل نهائياً. متأكد؟')) {
+    db.doc('orders/' + b.dataset.d).delete().catch(err => alert('تعذر حذف الطلب: ' + err.message));
   }
 };
-
-window.addEventListener('beforeunload', () => {
-  if (unsubscribeOrders) unsubscribeOrders();
-});
+window.addEventListener('beforeunload', () => { if (unsubscribeOrders) unsubscribeOrders(); });
 </script>
 </body>
 </html>
